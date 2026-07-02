@@ -34,10 +34,10 @@ def search_tavily(query, api_key):
             headers={"Content-Type": "application/json"}
         )
         if response.status_code == 200:
-            return response.json().get("results",)
+            return response.json().get("results", [])
     except Exception as e:
         st.warning(f"Arama hatası: {e}")
-    return
+    return []
 
 # Kullanıcı Girdi Alanları
 yuklenen_fotograf = st.file_uploader("Ürünün Fotoğrafını Yükleyin 📸", type=["jpg", "jpeg", "png"])
@@ -72,21 +72,27 @@ if st.button("Görseli Analiz Et ve Derin Araştırmayı Başlat", use_container
                     else:
                         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                     
-                    # Google API standartlarına %100 uygun camelCase Multimodal Payload
+                    # DÜZELTİLMİŞ PAYLOAD
                     payload = {
-                        "contents":
-                            }
-                        ]
+                        "contents": [{
+                            "parts": [{
+                                "text": "Bu görseldeki ürünün tam markasını, model numarasını ve rengini kısa bir metin olarak yaz.",
+                                "inline_data": {
+                                    "mime_type": mime_type,
+                                    "data": img_str
+                                }
+                            }]
+                        }]
                     }
                     
                     response = requests.post(url, json=payload, headers=headers)
                     response_json = response.json()
                     
-                    if response.status_code!= 200:
+                    if response.status_code != 200:
                         st.error(f"Google Gemini Görsel Analiz Hatası ({response.status_code}):")
                         st.json(response_json)
                     else:
-                        tespit_edilen_urun = response_json["candidates"]["content"]["parts"]["text"].strip()
+                        tespit_edilen_urun = response_json["candidates"][0]["content"]["parts"][0]["text"].strip()
                         st.success(f"🔍 **Yapay Zeka Tespiti:** {tespit_edilen_urun}")
                         
                         # 2. AŞAMA: DERİN İNTERNET ARAŞTIRMASI (Tavily Multi-Query Search)
@@ -157,11 +163,11 @@ if st.button("Görseli Analiz Et ve Derin Araştırmayı Başlat", use_container
                             synthesis_response = requests.post(url, json=synthesis_payload, headers=headers)
                             synthesis_json = synthesis_response.json()
                             
-                            if synthesis_response.status_code!= 200:
+                            if synthesis_response.status_code != 200:
                                 st.error(f"Sentezleme Hatası ({synthesis_response.status_code}):")
                                 st.json(synthesis_json)
                             else:
-                                final_report = synthesis_json["candidates"]["content"]["parts"]["text"]
+                                final_report = synthesis_json["candidates"][0]["content"]["parts"][0]["text"]
                                 st.markdown("---")
                                 st.markdown(final_report)
                                 st.balloons()
