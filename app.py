@@ -64,7 +64,7 @@ if st.button("Görseli Analiz Et ve Aramayı Başlat", use_container_width=True)
                     
                     prompt = "Bu görseldeki ürünün tam markasını, model numarasını ve rengini kısa bir metin olarak yaz."
                     
-                    # Kusursuz ve hatasız şekilde yapılandırılmış veri paketi
+                    # Kusursuz ve hatasız şekilde yapılandırılmış parantezsiz veri paketi
                     payload = {
                         "contents":
                             }
