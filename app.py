@@ -15,15 +15,14 @@ TAVILY_API_KEY = st.secrets.get("TAVILY_API_KEY", "")
 st.title("🔍 Ultra Stok & İndirim Uzmanı")
 
 yuklenen_fotograf = st.file_uploader("Ürün Fotoğrafı Yükleyin 📸", type=["jpg", "jpeg", "png"])
-ek_detay = st.text_input("Ekstra İstek / Detay", placeholder="45 numara, orijinal, en ucuz satıcı")
+ek_detay = st.text_input("Ekstra İstek / Detay", placeholder="45 numara, orijinal kutulu")
 
 if st.button("🚀 Ultra Derin Analiz Başlat", use_container_width=True, type="primary"):
     if not yuklenen_fotograf or not GEMINI_API_KEY or not TAVILY_API_KEY:
         st.error("Fotoğraf ve API anahtarları gereklidir.")
     else:
-        with st.spinner("Görsel analiz + Derin araştırmalar yapılıyor..."):
+        with st.spinner("Analiz + Araştırma + Rapor hazırlanıyor..."):
             try:
-                # Görsel hazırlık
                 image = Image.open(yuklenen_fotograf)
                 st.image(image, caption="Analiz Edilen Ürün", use_column_width=True)
 
@@ -35,58 +34,55 @@ if st.button("🚀 Ultra Derin Analiz Başlat", use_container_width=True, type="
 
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
 
-                # 1. Ürün Tespiti
-                urun_prompt = "Bu görseldeki ürünü detaylı analiz et: marka, tam model adı, renk, ana özellikler."
+                # Ürün tespiti
+                urun_prompt = "Bu görseldeki ürünü detaylı analiz et: marka, model, renk, özellikler."
                 payload = {"contents": [{"parts": [{"text": urun_prompt}, {"inline_data": {"mime_type": mime_type, "data": img_str}}]}]}
-                
                 urun_resp = requests.post(url, json=payload, headers={"Content-Type": "application/json"})
                 urun_bilgisi = urun_resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
-                st.success(f"✅ Ürün Tespit Edildi: {urun_bilgisi[:100]}...")
+                st.success("✅ Ürün Tespit Edildi")
 
-                # 2. Tavily Aramaları (Kısaltılmış Query)
+                # Tavily Aramaları
                 tavily = TavilyClient(api_key=TAVILY_API_KEY)
-                
                 aramalar = [
-                    f"{urun_bilgisi[:80]} {ek_detay} Türkiye fiyat stok",
-                    f"{urun_bilgisi[:80]} indirim kodu kupon",
-                    f"{urun_bilgisi[:80]} en ucuz satıcı"
+                    f"{urun_bilgisi[:70]} {ek_detay} Türkiye fiyat stok",
+                    f"{urun_bilgisi[:70]} indirim kodu kupon",
+                    f"{urun_bilgisi[:70]} en ucuz"
                 ]
 
                 tum_veriler = []
-                for i, sorgu in enumerate(aramalar, 1):
-                    with st.spinner(f"Arama katmanı {i}/3..."):
-                        sonuc = tavily.search(sorgu, search_depth="advanced", max_results=5)
-                        tum_veriler.extend(sonuc.get("results", []))
+                for sorgu in aramalar:
+                    sonuc = tavily.search(sorgu, search_depth="advanced", max_results=6)
+                    tum_veriler.extend(sonuc.get("results", []))
 
-                # 3. Uzman Rapor (Gemini Ajan)
+                # Linkleri net şekilde veren rapor promptu
                 rapor_prompt = f"""
-Sen Türkiye'nin en iyi e-ticaret alışveriş danışmanısın.
+Sen profesyonel bir alışveriş uzmanısın.
 
 **Ürün:** {urun_bilgisi}
 **Kullanıcı Talebi:** {ek_detay}
 
-**Web Arama Sonuçları:**
-{json.dumps([{'title': r.get('title',''), 'url': r.get('url',''), 'content': r.get('content','')[:400]} for r in tum_veriler], ensure_ascii=False)}
+**Bulunan Satış Linkleri ve Bilgiler:**
+{json.dumps([{'title': r.get('title',''), 'url': r.get('url',''), 'content': r.get('content','')[:300]} for r in tum_veriler], ensure_ascii=False, indent=2)}
 
-Bu verilerden yola çıkarak **ultra profesyonel rapor** hazırla. Şu başlıkları mutlaka kullan:
+Bu verilerden **çok detaylı ve link ağırlıklı** bir rapor hazırla. 
 
-1. **Ürün Kimliği ve Özellikleri**
-2. **Fiyat Karşılaştırma Tablosu** (En iyi 4-5 seçenek)
-3. **Kupon & Promosyon Analizi**
-4. **Matematiksel Maliyet Simülasyonu** (farklı senaryolar)
-5. **Risk Değerlendirmesi**
-6. **Final Tavsiye + Puan (100 üzerinden)**
+**Mutlaka** şunları yap:
+- Her satıcı için **doğrudan link** ver
+- Fiyatları tablo yap
+- Hangi kuponların geçerli olabileceğini belirt
+- Matematiksel maliyet karşılaştırması yap
+- En iyi 3 öneriyi net şekilde vurgula
 
-Raporu emoji, tablo ve net önerilerle zenginleştir.
+Raporu okunaklı, emoji ve markdown ile zenginleştir.
 """
 
-                with st.spinner("Uzman rapor hazırlanıyor..."):
+                with st.spinner("Uzman rapor oluşturuluyor..."):
                     rapor_payload = {"contents": [{"parts": [{"text": rapor_prompt}]}]}
                     rapor_resp = requests.post(url, json=rapor_payload, headers={"Content-Type": "application/json"})
                     final_rapor = rapor_resp.json()["candidates"][0]["content"]["parts"][0]["text"]
 
-                    st.markdown("## 📊 Ultra Uzman Rapor")
+                    st.markdown("## 📊 Ultra Uzman Raporu")
                     st.markdown(final_rapor)
 
             except Exception as e:
