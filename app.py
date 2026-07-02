@@ -1,6 +1,5 @@
 import streamlit as st
-from google import genai
-from google.genai import types
+import google.generativeai as genai
 from tavily import TavilyClient
 from PIL import Image
 import traceback
@@ -18,31 +17,22 @@ st.write("Bilgisayara ihtiyaç duymadan telefonunuzdan kullanın. Ürün fotoğr
 # Hata Ayıklama Paneli (Şifrelerin okunup okunmadığını kontrol eder)
 with st.expander("🛠️ Bağlantı ve Anahtar Kontrolü (Hata Ayıklama)"):
     if not GEMINI_API_KEY:
-        st.error("❌ Gemini API Anahtarı yükli değil veya hatalı!")
+        st.error("❌ Gemini API Anahtarı yüklü değil!")
+    elif not GEMINI_API_KEY.startswith("AIzaSy"):
+        st.warning(f"⚠️ Girdiğiniz Gemini API Anahtarı 'AIzaSy' ile başlamıyor! (Girdiğiniz: {GEMINI_API_KEY[:5]}...) Gerçek anahtar 'AIzaSy' ile başlamalıdır. Muhtemelen yanlış kimlik kodunu kopyaladınız.")
     else:
-        st.success("✓ Gemini API Anahtarı Okundu!")
+        st.success("✓ Gemini API Anahtarı Doğru Formatla Okundu!")
         
     if not TAVILY_API_KEY:
-        st.error("❌ Tavily API Anahtarı yükli değil veya hatalı!")
+        st.error("❌ Tavily API Anahtarı yüklü değil!")
     else:
         st.success("✓ Tavily API Anahtarı Okundu!")
 
 # İstemcileri başlat
-client = None
-tavily_client = None
-
-if GEMINI_API_KEY:
-    try:
-        # Yeni nesil google-genai istemcisi başlatılıyor
-        client = genai.Client(api_key=GEMINI_API_KEY)
-    except Exception as e:
-        st.error(f"Gemini istemcisi başlatılamadı: {e}")
-
+if GEMINI_API_KEY and GEMINI_API_KEY.startswith("AIzaSy"):
+    genai.configure(api_key=GEMINI_API_KEY)
 if TAVILY_API_KEY:
-    try:
-        tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
-    except Exception as e:
-        st.error(f"Tavily istemcisi başlatılamadı: {e}")
+    tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 
 # Kullanıcı Girdi Alanları
 yuklenen_fotograf = st.file_uploader("Ürünün Fotoğrafını Yükleyin 📸", type=["jpg", "jpeg", "png"])
@@ -52,8 +42,6 @@ if st.button("Görseli Analiz Et ve Aramayı Başlat", use_container_width=True)
     if yuklenen_fotograf is not None:
         if not GEMINI_API_KEY or not TAVILY_API_KEY:
             st.error("Lütfen önce sağ alt kısımdan 'Sırlar (Secrets)' ayarlarına giderek API anahtarlarınızı girin.")
-        elif client is None:
-            st.error("Gemini API istemcisi düzgün başlatılamadı. Lütfen anahtarınızı kontrol edin.")
         else:
             with st.spinner("Yapay zeka görseli analiz ediyor ve canlı stok taraması yapıyor..."):
                 try:
@@ -61,14 +49,10 @@ if st.button("Görseli Analiz Et ve Aramayı Başlat", use_container_width=True)
                     image = Image.open(yuklenen_fotograf)
                     st.image(image, caption="Analiz Edilen Ürün", use_column_width=True)
                     
+                    gemini_model = genai.GenerativeModel("gemini-1.5-flash")
                     prompt = "Bu görseldeki ürünün tam markasını, model numarasını ve rengini kısa bir metin olarak yaz."
-                    
-                    # Yeni google-genai kütüphanesi formatında generate_content çağrısı
-                    response = client.models.generate_content(
-                        model='gemini-2.5-flash',
-                        contents=[prompt, image]
-                    )
-                    tespit_edilen_urun = response.text.strip()
+                    gorsel_analiz = gemini_model.generate_content([prompt, image])
+                    tespit_edilen_urun = gorsel_analiz.text.strip()
                     
                     st.success(f"**Yapay Zeka Tespiti:** {tespit_edilen_urun}")
                     
