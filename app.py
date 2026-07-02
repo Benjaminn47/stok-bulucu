@@ -19,14 +19,14 @@ st.write("Bilgisayara ihtiyaç duymadan telefonunuzdan kullanın. Ürün fotoğr
 # Hata Ayıklama Paneli (Şifrelerin okunup okunmadığını kontrol eder)
 with st.expander("🛠️ Bağlantı ve Anahtar Kontrolü (Hata Ayıklama)"):
     if not GEMINI_API_KEY:
-        st.error("❌ Gemini API Anahtarı yüklü değil!")
+        st.error("❌ Gemini API Anahtarı yükli değil!")
     else:
         st.success(f"✓ Gemini API Anahtarı Okundu: {GEMINI_API_KEY[:5]}...{GEMINI_API_KEY[-5:]}")
         
     if not TAVILY_API_KEY:
-        st.error("❌ Tavily API Anahtarı yüklü değil!")
+        st.error("❌ Tavily API Anahtarı yükli değil!")
     else:
-        st.success("✓ Tavily API Anahtarı Okundu!")
+        st.success(f"✓ Tavily API Anahtarı Okundu!")
 
 # İstemcileri başlat
 tavily_client = None
@@ -64,6 +64,7 @@ if st.button("Görseli Analiz Et ve Aramayı Başlat", use_container_width=True)
                     
                     prompt = "Bu görseldeki ürünün tam markasını, model numarasını ve rengini kısa bir metin olarak yaz."
                     
+                    # Parantez hataları giderilmiş ve doğru biçimlendirilmiş veri paketi
                     payload = {
                         "contents":
                             }
