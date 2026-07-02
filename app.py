@@ -1,7 +1,9 @@
 import streamlit as st
-import google.generativeai as genai
+import requests
+import base64
 from tavily import TavilyClient
 from PIL import Image
+import io
 import traceback
 
 # Sayfa Ayarları (Mobil uyumlu görünüm için)
@@ -18,10 +20,8 @@ st.write("Bilgisayara ihtiyaç duymadan telefonunuzdan kullanın. Ürün fotoğr
 with st.expander("🛠️ Bağlantı ve Anahtar Kontrolü (Hata Ayıklama)"):
     if not GEMINI_API_KEY:
         st.error("❌ Gemini API Anahtarı yüklü değil!")
-    elif not GEMINI_API_KEY.startswith("AIzaSy"):
-        st.warning(f"⚠️ Girdiğiniz Gemini API Anahtarı 'AIzaSy' ile başlamıyor! (Girdiğiniz: {GEMINI_API_KEY[:5]}...) Gerçek anahtar 'AIzaSy' ile başlamalıdır. Muhtemelen yanlış kimlik kodunu kopyaladınız.")
     else:
-        st.success("✓ Gemini API Anahtarı Doğru Formatla Okundu!")
+        st.success(f"✓ Gemini API Anahtarı Okundu: {GEMINI_API_KEY[:5]}...{GEMINI_API_KEY[-5:]}")
         
     if not TAVILY_API_KEY:
         st.error("❌ Tavily API Anahtarı yüklü değil!")
@@ -29,8 +29,7 @@ with st.expander("🛠️ Bağlantı ve Anahtar Kontrolü (Hata Ayıklama)"):
         st.success("✓ Tavily API Anahtarı Okundu!")
 
 # İstemcileri başlat
-if GEMINI_API_KEY and GEMINI_API_KEY.startswith("AIzaSy"):
-    genai.configure(api_key=GEMINI_API_KEY)
+tavily_client = None
 if TAVILY_API_KEY:
     tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 
@@ -45,41 +44,67 @@ if st.button("Görseli Analiz Et ve Aramayı Başlat", use_container_width=True)
         else:
             with st.spinner("Yapay zeka görseli analiz ediyor ve canlı stok taraması yapıyor..."):
                 try:
-                    # 1. Aşama: Gemini AI ile Görsel Analizi
+                    # 1. Aşama: Gemini AI ile Görsel Analizi (Direct HTTP API Call)
                     image = Image.open(yuklenen_fotograf)
                     st.image(image, caption="Analiz Edilen Ürün", use_column_width=True)
                     
-                    gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+                    # Görseli bytes olarak RAM'e kaydedip oradan base64'e dönüştürüyoruz
+                    buffered = io.BytesIO()
+                    img_format = image.format if image.format else "JPEG"
+                    image.save(buffered, format=img_format)
+                    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                    
+                    mime_type = f"image/{img_format.lower()}"
+                    if mime_type == "image/jpg":
+                        mime_type = "image/jpeg"
+                    
+                    # Gemini API'sine doğrudan güvenli internet bağlantısı kuruyoruz
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+                    headers = {"Content-Type": "application/json"}
+                    
                     prompt = "Bu görseldeki ürünün tam markasını, model numarasını ve rengini kısa bir metin olarak yaz."
-                    gorsel_analiz = gemini_model.generate_content([prompt, image])
-                    tespit_edilen_urun = gorsel_analiz.text.strip()
                     
-                    st.success(f"**Yapay Zeka Tespiti:** {tespit_edilen_urun}")
+                    payload = {
+                        "contents":
+                            }
+                        ]
+                    }
                     
-                    # 2. Aşama: Tavily API ile Derinlemesine Web ve İndirim Araması
-                    arama_sorgusu = f"{tespit_edilen_urun} {ek_detay} satın al Türkiye fiyat stok"
-                    indirim_sorgusu = f"{tespit_edilen_urun} güncel indirim kodu 2026 Türkiye"
+                    response = requests.post(url, json=payload, headers=headers)
+                    response_json = response.json()
                     
-                    st.info("E-ticaret siteleri ve kupon platformları taranıyor...")
-                    
-                    # Canlı arama motoru tetikleniyor
-                    stok_sonuclari = tavily_client.search(arama_sorgusu, search_depth="advanced", max_results=3)
-                    kupon_sonuclari = tavily_client.search(indirim_sorgusu, search_depth="basic", max_results=2)
-                    
-                    # 3. Aşama: Sonuçları Listeleme
-                    st.markdown("### 🛒 Bulunan Satış Noktaları ve Linkler")
-                    for item in stok_sonuclari['results']:
-                        st.markdown(f"""
-                        * **[{item['title']}]({item['url']})**
-                        > {item['content']}
-                        """)
-                    
-                    st.markdown("### 🎟️ Bulunan Aktif İndirim Kodları")
-                    for kupon in kupon_sonuclari['results']:
-                        st.markdown(f"""
-                        * **[Kupon Kaynağı: {kupon['title']}]({kupon['url']})**
-                        > {kupon['content']}
-                        """)
+                    # Yanıtı kontrol et
+                    if response.status_code!= 200:
+                        st.error(f"Google Gemini API Hatası ({response.status_code}):")
+                        st.json(response_json)
+                    else:
+                        tespit_edilen_urun = response_json["candidates"]["content"]["parts"]["text"].strip()
+                        st.success(f"**Yapay Zeka Tespiti:** {tespit_edilen_urun}")
+                        
+                        # 2. Aşama: Tavily API ile Derinlemesine Web ve İndirim Araması
+                        arama_sorgusu = f"{tespit_edilen_urun} {ek_detay} satın al Türkiye fiyat stok"
+                        indirim_sorgusu = f"{tespit_edilen_urun} güncel indirim kodu 2026 Türkiye"
+                        
+                        st.info("E-ticaret siteleri ve kupon platformları taranıyor...")
+                        
+                        # Canlı arama motoru tetikleniyor
+                        stok_sonuclari = tavily_client.search(arama_sorgusu, search_depth="advanced", max_results=3)
+                        kupon_sonuclari = tavily_client.search(indirim_sorgusu, search_depth="basic", max_results=2)
+                        
+                        # 3. Aşama: Sonuçları Listeleme
+                        st.markdown("### 🛒 Bulunan Satış Noktaları ve Linkler")
+                        for item in stok_sonuclari['results']:
+                            st.markdown(f"""
+                            * **[{item['title']}]({item['url']})**
+                            > {item['content']}
+                            """)
+                        
+                        st.markdown("### 🎟️ Bulunan Aktif İndirim Kodları")
+                        for kupon in kupon_sonuclari['results']:
+                            st.markdown(f"""
+                            * **[Kupon Kaynağı: {kupon['title']}]({kupon['url']})**
+                            > {kupon['content']}
+                            """)
 
                 except Exception as e:
                     st.error("Bir hata oluştu! Detaylı hata raporu aşağıdadır:")
