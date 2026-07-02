@@ -6,34 +6,34 @@ from PIL import Image
 import io
 import traceback
 
-# Sayfa Ayarları (Mobil uyumlu görünüm için)
+# Sayfa Ayarları
 st.set_page_config(page_title="Akıllı Stok & İndirim Bulucu", page_icon="👟", layout="centered")
 
-# Secrets kontrolü ve çekilmesi
+# Secrets kontrolü
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", "")
 TAVILY_API_KEY = st.secrets.get("TAVILY_API_KEY", "")
 
 st.title("📱 Akıllı Stok ve İndirim Bulucu")
 st.write("Bilgisayara ihtiyaç duymadan telefonunuzdan kullanın. Ürün fotoğrafı yükleyin, yapay zeka markayı tanısın, canlı stok ve indirim kodlarını bulsun.")
 
-# Hata Ayıklama Paneli (Şifrelerin okunup okunmadığını kontrol eder)
+# Hata Ayıklama Paneli
 with st.expander("🛠️ Bağlantı ve Anahtar Kontrolü (Hata Ayıklama)"):
     if not GEMINI_API_KEY:
-        st.error("❌ Gemini API Anahtarı yükli değil!")
+        st.error("❌ Gemini API Anahtarı yüklü değil!")
     else:
         st.success(f"✓ Gemini API Anahtarı Okundu: {GEMINI_API_KEY[:5]}...{GEMINI_API_KEY[-5:]}")
         
     if not TAVILY_API_KEY:
-        st.error("❌ Tavily API Anahtarı yükli değil!")
+        st.error("❌ Tavily API Anahtarı yüklü değil!")
     else:
         st.success(f"✓ Tavily API Anahtarı Okundu!")
 
-# İstemcileri başlat
+# Tavily Client
 tavily_client = None
 if TAVILY_API_KEY:
     tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
 
-# Kullanıcı Girdi Alanları
+# Kullanıcı Girdileri
 yuklenen_fotograf = st.file_uploader("Ürünün Fotoğrafını Yükleyin 📸", type=["jpg", "jpeg", "png"])
 ek_detay = st.text_input("Ekstra Detay (Örn: 45 Numara, Siyah renk)", placeholder="İstediğiniz bedeni veya detayı yazın...")
 
@@ -44,11 +44,11 @@ if st.button("Görseli Analiz Et ve Aramayı Başlat", use_container_width=True)
         else:
             with st.spinner("Yapay zeka görseli analiz ediyor ve canlı stok taraması yapıyor..."):
                 try:
-                    # 1. Aşama: Gemini AI ile Görsel Analizi (Direct HTTP API Call)
+                    # 1. Görseli yükle ve göster
                     image = Image.open(yuklenen_fotograf)
                     st.image(image, caption="Analiz Edilen Ürün", use_column_width=True)
                     
-                    # Görseli bytes olarak RAM'e kaydedip oradan base64'e dönüştürüyoruz
+                    # Görseli base64'e çevir
                     buffered = io.BytesIO()
                     img_format = image.format if image.format else "JPEG"
                     image.save(buffered, format=img_format)
@@ -58,55 +58,69 @@ if st.button("Görseli Analiz Et ve Aramayı Başlat", use_container_width=True)
                     if mime_type == "image/jpg":
                         mime_type = "image/jpeg"
                     
-                    # Gemini API'sine doğrudan güvenli internet bağlantısı kuruyoruz
+                    # Gemini API isteği
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
                     headers = {"Content-Type": "application/json"}
                     
-                    prompt = "Bu görseldeki ürünün tam markasını, model numarasını ve rengini kısa bir metin olarak yaz."
+                    prompt = "Bu görseldeki ürünün tam markasını, model numarasını ve rengini kısa bir metin olarak yaz. Sadece ürün bilgisini ver."
                     
-                    # Kusursuz ve hatasız şekilde yapılandırılmış parantezsiz veri paketi
+                    # DÜZELTİLMİŞ ve DOĞRU PAYLOAD
                     payload = {
-                        "contents":
-                            }
-                        ]
+                        "contents": [{
+                            "parts": [{
+                                "text": prompt,
+                                "inline_data": {
+                                    "mime_type": mime_type,
+                                    "data": img_str
+                                }
+                            }]
+                        }]
                     }
                     
                     response = requests.post(url, json=payload, headers=headers)
                     response_json = response.json()
                     
-                    # Yanıtı kontrol et
-                    if response.status_code!= 200:
+                    # Yanıt kontrolü
+                    if response.status_code != 200:
                         st.error(f"Google Gemini API Hatası ({response.status_code}):")
                         st.json(response_json)
                     else:
-                        # Yanıt içindeki listeleri ve indisleri doğru şekilde ayıklıyoruz
-                        tespit_edilen_urun = response_json["candidates"]["content"]["parts"]["text"].strip()
-                        st.success(f"**Yapay Zeka Tespiti:** {tespit_edilen_urun}")
-                        
-                        # 2. Aşama: Tavily API ile Derinlemesine Web ve İndirim Araması
+                        # Yanıtı güvenli şekilde al
+                        try:
+                            text = response_json["candidates"][0]["content"]["parts"][0]["text"]
+                            tespit_edilen_urun = text.strip()
+                            st.success(f"**Yapay Zeka Tespiti:** {tespit_edilen_urun}")
+                        except (KeyError, IndexError, TypeError):
+                            tespit_edilen_urun = "Ürün tespit edilemedi."
+                            st.warning("Gemini'den net bir ürün bilgisi alınamadı.")
+                            st.json(response_json)
+                    
+                    # 2. Tavily ile arama
+                    if tespit_edilen_urun and tespit_edilen_urun != "Ürün tespit edilemedi.":
                         arama_sorgusu = f"{tespit_edilen_urun} {ek_detay} satın al Türkiye fiyat stok"
                         indirim_sorgusu = f"{tespit_edilen_urun} güncel indirim kodu 2026 Türkiye"
                         
                         st.info("E-ticaret siteleri ve kupon platformları taranıyor...")
                         
-                        # Canlı arama motoru tetikleniyor
-                        stok_sonuclari = tavily_client.search(arama_sorgusu, search_depth="advanced", max_results=3)
-                        kupon_sonuclari = tavily_client.search(indirim_sorgusu, search_depth="basic", max_results=2)
+                        stok_sonuclari = tavily_client.search(arama_sorgusu, search_depth="advanced", max_results=5)
+                        kupon_sonuclari = tavily_client.search(indirim_sorgusu, search_depth="basic", max_results=3)
                         
-                        # 3. Aşama: Sonuçları Listeleme
+                        # Sonuçları göster
                         st.markdown("### 🛒 Bulunan Satış Noktaları ve Linkler")
-                        for item in stok_sonuclari['results']:
+                        for item in stok_sonuclari.get('results', []):
                             st.markdown(f"""
-                            * **[{item['title']}]({item['url']})**
-                            > {item['content']}
+                            * **[{item.get('title', 'Başlık yok')}]({item.get('url', '#')})**
+                            > {item.get('content', 'Açıklama yok')}
                             """)
                         
                         st.markdown("### 🎟️ Bulunan Aktif İndirim Kodları")
-                        for kupon in kupon_sonuclari['results']:
+                        for kupon in kupon_sonuclari.get('results', []):
                             st.markdown(f"""
-                            * **[Kupon Kaynağı: {kupon['title']}]({kupon['url']})**
-                            > {kupon['content']}
+                            * **[Kupon Kaynağı: {kupon.get('title', 'Başlık yok')}]({kupon.get('url', '#')})**
+                            > {kupon.get('content', 'Açıklama yok')}
                             """)
+                    else:
+                        st.warning("Ürün tespiti yapılamadığı için arama yapılamadı.")
 
                 except Exception as e:
                     st.error("Bir hata oluştu! Detaylı hata raporu aşağıdadır:")
