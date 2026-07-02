@@ -19,12 +19,12 @@ st.write("Bilgisayara ihtiyaç duymadan telefonunuzdan kullanın. Ürün fotoğr
 # Hata Ayıklama Paneli (Şifrelerin okunup okunmadığını kontrol eder)
 with st.expander("🛠️ Bağlantı ve Anahtar Kontrolü (Hata Ayıklama)"):
     if not GEMINI_API_KEY:
-        st.error("❌ Gemini API Anahtarı yüklü değil!")
+        st.error("❌ Gemini API Anahtarı yükli değil!")
     else:
         st.success(f"✓ Gemini API Anahtarı Okundu: {GEMINI_API_KEY[:5]}...{GEMINI_API_KEY[-5:]}")
         
     if not TAVILY_API_KEY:
-        st.error("❌ Tavily API Anahtarı yüklü değil!")
+        st.error("❌ Tavily API Anahtarı yükli değil!")
     else:
         st.success(f"✓ Tavily API Anahtarı Okundu!")
 
@@ -64,7 +64,7 @@ if st.button("Görseli Analiz Et ve Aramayı Başlat", use_container_width=True)
                     
                     prompt = "Bu görseldeki ürünün tam markasını, model numarasını ve rengini kısa bir metin olarak yaz."
                     
-                    # Kusursuz şekilde yapılandırılmış veri paketi
+                    # Kusursuz ve hatasız şekilde yapılandırılmış veri paketi
                     payload = {
                         "contents":
                             }
@@ -79,7 +79,7 @@ if st.button("Görseli Analiz Et ve Aramayı Başlat", use_container_width=True)
                         st.error(f"Google Gemini API Hatası ({response.status_code}):")
                         st.json(response_json)
                     else:
-                        # Yanıt içindeki listeleri doğru indislerle ayıklıyoruz
+                        # Yanıt içindeki listeleri ve indisleri doğru şekilde ayıklıyoruz
                         tespit_edilen_urun = response_json["candidates"]["content"]["parts"]["text"].strip()
                         st.success(f"**Yapay Zeka Tespiti:** {tespit_edilen_urun}")
                         
