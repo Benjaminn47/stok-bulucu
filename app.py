@@ -52,7 +52,7 @@ if st.button("Görseli Analiz Et ve Derin Araştırmayı Başlat", use_container
             with st.spinner("Yapay zeka görseldeki ayakkabıyı tanımlıyor..."):
                 try:
                     image = Image.open(yuklenen_fotograf)
-                    st.image(image, caption="Analiz Edilen Ürün", use_column_width=True)
+                    st.image(image, caption="Analiz Edilen Ürün", use_container_width=True)
                     
                     # Görseli bytes olarak RAM'e kaydedip oradan base64'e dönüştürüyoruz
                     buffered = io.BytesIO()
